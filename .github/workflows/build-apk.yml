@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -19,6 +19,26 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip python3-dev python3-setuptools python3-venv python3-distutils
+        sudo apt-get install -y build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev libjpeg-dev libpng-dev zlib1g-dev
+
+    - name: Setup Android SDK
+      run: |
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        sudo mkdir -p $ANDROID_SDK_ROOT
+        sudo chown $USER:$USER $ANDROID_SDK_ROOT
+        cd $ANDROID_SDK_ROOT
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+        export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+        yes | sdkmanager --licenses
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
 
     - name: Cache pip dependencies
       uses: actions/cache@v4
@@ -30,9 +50,9 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install buildozer cython
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        python3 -m pip install --upgrade pip
+        pip3 install buildozer cython
+        if [ -f requirements.txt ]; then pip3 install -r requirements.txt; fi
 
     - name: Cache Buildozer global directory
       uses: actions/cache@v4
@@ -45,29 +65,39 @@ jobs:
       with:
         path: .buildozer
         key: ${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-    
-    - name: Create missing directories
+
+    - name: Create missing directories and files
       run: |
-        mkdir -p app/core app/ui app/data assets/icons data
+        mkdir -p app/core app/ui app/data assets/icons data bin
         touch app/__init__.py app/core/__init__.py app/ui/__init__.py app/data/__init__.py
-    
-    - name: Initialize buildozer if needed
+
+    - name: Setup buildozer spec
       run: |
         if [ ! -f buildozer.spec ]; then
           cp buildozer-minimal.spec buildozer.spec
         fi
-    
+
+    - name: Set environment variables
+      run: |
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
+        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+
     - name: Build APK
       run: |
         buildozer android debug
-    
+
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: accounting-app-debug
         path: bin/*.apk
         retention-days: 30
-    
+
     - name: Upload build logs
       if: failure()
       uses: actions/upload-artifact@v4
