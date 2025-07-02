@@ -69,8 +69,7 @@ jobs:
           echo "Creating $tool wrapper"
           cat > "$BUILD_TOOLS_DIR/$tool" << 'TOOL_EOF'
 #!/bin/bash
-echo "Android tool wrapper: $0 called with args: $@"
-# For most tools, just exit successfully
+echo "Android tool wrapper called: $tool"
 exit 0
 TOOL_EOF
           chmod +x "$BUILD_TOOLS_DIR/$tool"
@@ -99,7 +98,7 @@ from kivy.uix.label import Label
 
 class TestApp(App):
     def build(self):
-        return Label(text='Mobile Accounting App\nBuild Test')
+        return Label(text='Mobile Accounting App - Build Test')
 
 TestApp().run()
 EOF
