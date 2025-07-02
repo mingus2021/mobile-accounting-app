@@ -57,8 +57,20 @@ jobs:
         yes | sdkmanager --licenses || true
         sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
     
-    - name: Create aidl wrapper
+    - name: Setup buildozer and create aidl wrapper
       run: |
+        # Initialize buildozer to create .buildozer directory
+        buildozer init || true
+
+        # Create buildozer's Android SDK directory structure
+        mkdir -p $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0
+
+        # Create aidl wrapper in buildozer's expected location
+        echo '#!/bin/bash' > $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+        echo 'exit 0' >> $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+        chmod +x $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+
+        # Also create in our Android SDK location as backup
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/build-tools/33.0.0
         echo '#!/bin/bash' > $ANDROID_HOME/build-tools/33.0.0/aidl
@@ -71,10 +83,16 @@ jobs:
         export ANDROID_SDK_ROOT=$ANDROID_HOME
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
 
+        # Copy our Android SDK to buildozer's expected location
+        mkdir -p $HOME/.buildozer/android/platform/
+        cp -r $ANDROID_HOME $HOME/.buildozer/android/platform/android-sdk
+
         # Debug info
         echo "ANDROID_HOME: $ANDROID_HOME"
         echo "Python version: $(python --version)"
         echo "Buildozer version: $(buildozer version)"
+        echo "Buildozer Android SDK: $HOME/.buildozer/android/platform/android-sdk"
+        ls -la $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/ || echo "Build tools not found"
 
         # Build APK
         buildozer android debug
