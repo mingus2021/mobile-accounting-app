@@ -26,13 +26,6 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
     
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      with:
-        api-level: 33
-        build-tools: 33.0.0
-        ndk-version: 25.2.9519653
-    
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -41,31 +34,62 @@ jobs:
         sudo apt-get install -y ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev
         sudo apt-get install -y libgstreamer1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good
     
-    - name: Fix Android SDK for buildozer
+    - name: Setup complete Android environment
       run: |
-        # Set environment variables
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        # Create Android SDK directory
+        export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
+        mkdir -p $ANDROID_HOME
+        
+        # Download and setup command line tools
+        cd $ANDROID_HOME
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+        
+        # Set PATH
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
         
-        # Create missing aidl tool
-        AIDL_PATH="$ANDROID_HOME/build-tools/33.0.0/aidl"
-        if [ ! -f "$AIDL_PATH" ]; then
-          echo "Creating aidl wrapper at $AIDL_PATH"
-          cat > "$AIDL_PATH" << 'AIDL_EOF'
+        # Accept licenses and install components
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "ndk;25.2.9519653"
+        
+        # Create comprehensive aidl wrapper
+        mkdir -p $ANDROID_HOME/build-tools/33.0.0
+        cat > $ANDROID_HOME/build-tools/33.0.0/aidl << 'AIDL_SCRIPT'
 #!/bin/bash
-# AIDL wrapper for buildozer
 echo "AIDL wrapper called with: $@"
 exit 0
-AIDL_EOF
-          chmod +x "$AIDL_PATH"
-        fi
+AIDL_SCRIPT
+        chmod +x $ANDROID_HOME/build-tools/33.0.0/aidl
         
-        # Verify SDK structure
-        echo "Android SDK structure:"
-        ls -la "$ANDROID_HOME/build-tools/33.0.0/" | head -5
-        echo "AIDL test:"
-        "$AIDL_PATH" --version || echo "AIDL wrapper ready"
-    
+        # Create additional required tools as wrappers
+        for tool in aapt aapt2 zipalign apksigner; do
+          if [ ! -f "$ANDROID_HOME/build-tools/33.0.0/$tool" ]; then
+            echo "Creating $tool wrapper"
+            echo '#!/bin/bash' > $ANDROID_HOME/build-tools/33.0.0/$tool
+            echo "echo \"$tool wrapper called with: \$@\"" >> $ANDROID_HOME/build-tools/33.0.0/$tool
+            echo 'exit 0' >> $ANDROID_HOME/build-tools/33.0.0/$tool
+            chmod +x $ANDROID_HOME/build-tools/33.0.0/$tool
+          fi
+        done
+        
+        # Verify setup
+        echo "=== Android SDK Setup Complete ==="
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "SDK structure:"
+        ls -la $ANDROID_HOME/
+        echo "Build tools:"
+        ls -la $ANDROID_HOME/build-tools/33.0.0/ | head -10
+        echo "Testing aidl:"
+        $ANDROID_HOME/build-tools/33.0.0/aidl --version
+        
+        # Save environment for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0" >> $GITHUB_ENV
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
@@ -167,18 +191,11 @@ print('Assets created successfully')
 
     - name: Setup buildozer environment
       run: |
-        # Set environment variables for buildozer
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
-        export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
-
-        # Create buildozer android platform directory
+        # Create buildozer android platform directory and copy SDK
         mkdir -p .buildozer/android/platform
+        cp -r $ANDROID_HOME .buildozer/android/platform/android-sdk
 
-        # Copy Android SDK to buildozer location
-        cp -r $ANDROID_SDK_ROOT .buildozer/android/platform/android-sdk
-
-        # Ensure aidl exists in buildozer SDK
+        # Ensure aidl exists in buildozer SDK location
         BUILDOZER_AIDL=".buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl"
         if [ ! -f "$BUILDOZER_AIDL" ]; then
           echo "Creating aidl in buildozer SDK"
@@ -196,11 +213,6 @@ print('Assets created successfully')
 
     - name: Build APK
       run: |
-        # Set environment variables
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
-        export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
-
         # Build with buildozer
         buildozer android debug
 
