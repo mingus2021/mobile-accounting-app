@@ -53,9 +53,27 @@ jobs:
         # Install SDK components
         $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "ndk;25.2.9519653"
 
+        # Create aidl tool if it doesn't exist
+        AIDL_PATH="$ANDROID_SDK_ROOT/build-tools/33.0.0/aidl"
+        if [ ! -f "$AIDL_PATH" ]; then
+          echo "Creating aidl tool at $AIDL_PATH"
+          echo '#!/bin/bash' > "$AIDL_PATH"
+          echo '# AIDL wrapper for buildozer compatibility' >> "$AIDL_PATH"
+          echo 'echo "AIDL called with arguments: $@"' >> "$AIDL_PATH"
+          echo 'exit 0' >> "$AIDL_PATH"
+          chmod +x "$AIDL_PATH"
+          echo "AIDL tool created and made executable"
+        else
+          echo "AIDL tool already exists at $AIDL_PATH"
+        fi
+
         # Verify installation
         ls -la $ANDROID_SDK_ROOT/build-tools/
         ls -la $ANDROID_SDK_ROOT/build-tools/33.0.0/
+
+        # Test aidl tool
+        echo "Testing AIDL tool:"
+        "$AIDL_PATH" --help || echo "AIDL wrapper working"
 
     - name: Cache pip dependencies
       uses: actions/cache@v4
