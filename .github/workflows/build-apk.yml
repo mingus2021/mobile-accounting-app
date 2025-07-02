@@ -19,38 +19,60 @@ jobs:
         distribution: 'temurin'
         java-version: '11'
     
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y git zip unzip openjdk-11-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+
+    - name: Install Python dependencies
+      run: |
         python -m pip install --upgrade pip
-        pip install buildozer cython kivy
+        pip install buildozer==1.4.0 cython==0.29.33 kivy==2.1.0
     
     - name: Setup Android SDK
       run: |
         export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
         mkdir -p $ANDROID_HOME
         cd $ANDROID_HOME
+
+        # Download and setup command line tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
         unzip -q commandlinetools-linux-9477386_latest.zip
         mkdir -p cmdline-tools/latest
-        mv cmdline-tools/* cmdline-tools/latest/
-        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-        yes | sdkmanager --licenses
-        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "ndk;25.2.9519653"
+        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+
+        # Set environment variables
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0" >> $GITHUB_ENV
+        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+
+        # Accept licenses and install packages
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+        yes | sdkmanager --licenses || true
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
     
     - name: Create aidl wrapper
       run: |
+        export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/build-tools/33.0.0
         echo '#!/bin/bash' > $ANDROID_HOME/build-tools/33.0.0/aidl
         echo 'exit 0' >> $ANDROID_HOME/build-tools/33.0.0/aidl
         chmod +x $ANDROID_HOME/build-tools/33.0.0/aidl
     
     - name: Build APK
-      run: buildozer android debug
+      run: |
+        export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
+
+        # Debug info
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "Python version: $(python --version)"
+        echo "Buildozer version: $(buildozer version)"
+
+        # Build APK
+        buildozer android debug
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
