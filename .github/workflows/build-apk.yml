@@ -198,12 +198,32 @@ jobs:
         # Create buildozer directories
         mkdir -p .buildozer/android/platform
 
-        # Create symlink to our Android SDK
-        ln -sf $HOME/android-sdk .buildozer/android/platform/android-sdk
+        # Remove any existing android-sdk directory
+        rm -rf .buildozer/android/platform/android-sdk
 
-        # Verify the symlink works
+        # Copy our Android SDK to buildozer location
+        cp -r $HOME/android-sdk .buildozer/android/platform/android-sdk
+
+        # Verify the copy worked
         ls -la .buildozer/android/platform/
+        ls -la .buildozer/android/platform/android-sdk/
         ls -la .buildozer/android/platform/android-sdk/build-tools/
+
+        # Make sure aidl is executable
+        chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+
+    - name: Debug environment
+      run: |
+        echo "=== Environment Variables ==="
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo "PATH: $PATH"
+        echo ""
+        echo "=== Buildozer SDK Check ==="
+        ls -la .buildozer/android/platform/android-sdk/build-tools/33.0.0/
+        echo ""
+        echo "=== AIDL Check ==="
+        .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl --help || echo "AIDL not working"
 
     - name: Build APK
       run: |
