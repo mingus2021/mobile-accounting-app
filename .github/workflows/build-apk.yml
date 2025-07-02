@@ -45,11 +45,17 @@ jobs:
         # Set environment variables
         export ANDROID_SDK_ROOT=$HOME/android-sdk
         export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
+        export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/33.0.0
 
-        # Accept licenses and install components
+        # Accept licenses first
         yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+
+        # Install SDK components
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "ndk;25.2.9519653"
+
+        # Verify installation
+        ls -la $ANDROID_SDK_ROOT/build-tools/
+        ls -la $ANDROID_SDK_ROOT/build-tools/33.0.0/
 
     - name: Cache pip dependencies
       uses: actions/cache@v4
@@ -171,7 +177,7 @@ jobs:
         android.api = 33
         android.minapi = 21
         android.sdk = 33
-        android.ndk = 25b
+        android.ndk = 25.2.9519653
         android.accept_sdk_license = True
         android.archs = arm64-v8a
         EOF
@@ -182,6 +188,7 @@ jobs:
         echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
         echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
         echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+        echo "$HOME/android-sdk/build-tools/33.0.0" >> $GITHUB_PATH
 
     - name: Build APK
       run: |
