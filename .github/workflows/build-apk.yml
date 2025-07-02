@@ -51,7 +51,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         python3 -m pip install --upgrade pip
-        pip3 install buildozer cython
+        pip3 install buildozer cython Pillow
         if [ -f requirements.txt ]; then pip3 install -r requirements.txt; fi
 
     - name: Cache Buildozer global directory
@@ -70,6 +70,71 @@ jobs:
       run: |
         mkdir -p app/core app/ui app/data assets/icons data bin
         touch app/__init__.py app/core/__init__.py app/ui/__init__.py app/data/__init__.py
+
+    - name: Create assets with PIL
+      run: |
+        mkdir -p data
+        python3 -c "
+        from PIL import Image, ImageDraw
+
+        # Create icon (48x48)
+        img = Image.new('RGBA', (48, 48), (0, 120, 215, 255))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([8, 8, 40, 40], fill=(255, 255, 255, 255))
+        img.save('data/icon.png')
+
+        # Create presplash (512x512)
+        img2 = Image.new('RGBA', (512, 512), (0, 120, 215, 255))
+        draw2 = ImageDraw.Draw(img2)
+        draw2.rectangle([100, 100, 412, 412], fill=(255, 255, 255, 255))
+        img2.save('data/presplash.png')
+        print('Assets created successfully')
+        "
+
+    - name: Create main.py
+      run: |
+        cat > main.py << 'EOF'
+        from kivy.app import App
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.label import Label
+        from kivy.uix.button import Button
+
+        class MainWidget(BoxLayout):
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self.orientation = 'vertical'
+                self.spacing = 10
+                self.padding = 20
+
+                title = Label(
+                    text='Mobile Accounting App',
+                    size_hint_y=None,
+                    height=50,
+                    font_size=24
+                )
+                self.add_widget(title)
+
+                subtitle = Label(
+                    text='Built with Python & Kivy\nVersion 0.1',
+                    size_hint_y=None,
+                    height=80
+                )
+                self.add_widget(subtitle)
+
+                btn = Button(
+                    text='Start Accounting',
+                    size_hint_y=None,
+                    height=50
+                )
+                self.add_widget(btn)
+
+        class AccountingApp(App):
+            def build(self):
+                return MainWidget()
+
+        if __name__ == '__main__':
+            AccountingApp().run()
+        EOF
 
     - name: Setup buildozer spec
       run: |

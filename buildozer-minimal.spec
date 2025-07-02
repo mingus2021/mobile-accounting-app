@@ -24,6 +24,12 @@ source.exclude_dirs = tests, bin, .git, __pycache__, .github, docs
 # (str) Application versioning (method 1)
 version = 1.0.0
 
+# (str) Presplash of the application
+presplash.filename = %(source.dir)s/data/presplash.png
+
+# (str) Icon of the application
+icon.filename = %(source.dir)s/data/icon.png
+
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
 requirements = python3,kivy,requests,cryptography,certifi
