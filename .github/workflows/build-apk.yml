@@ -147,11 +147,34 @@ jobs:
             AccountingApp().run()
         EOF
 
-    - name: Setup buildozer spec
+    - name: Create buildozer.spec
       run: |
-        if [ ! -f buildozer.spec ]; then
-          cp buildozer-minimal.spec buildozer.spec
-        fi
+        cat > buildozer.spec << 'EOF'
+        [app]
+        title = Mobile Accounting
+        package.name = mobileaccounting
+        package.domain = com.example
+        source.dir = .
+        source.include_exts = py,png,jpg,kv,atlas
+        version = 0.1
+        requirements = python3,kivy
+        presplash.filename = %(source.dir)s/data/presplash.png
+        icon.filename = %(source.dir)s/data/icon.png
+        orientation = portrait
+        fullscreen = 0
+
+        [buildozer]
+        log_level = 2
+
+        [app:android]
+        android.permissions = INTERNET
+        android.api = 33
+        android.minapi = 21
+        android.sdk = 33
+        android.ndk = 25b
+        android.accept_sdk_license = True
+        android.archs = arm64-v8a
+        EOF
 
     - name: Set environment variables
       run: |
