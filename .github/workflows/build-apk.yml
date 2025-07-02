@@ -10,277 +10,212 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
+    
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-
+    
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 33
+        build-tools: 33.0.0
+        ndk-version: 25.2.9519653
+    
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip python3-dev python3-setuptools python3-venv
+        sudo apt-get install -y git zip unzip python3-pip python3-dev python3-setuptools python3-venv
         sudo apt-get install -y build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev libjpeg-dev libpng-dev zlib1g-dev
         sudo apt-get install -y ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev
         sudo apt-get install -y libgstreamer1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good
-
-    - name: Setup Android SDK
+    
+    - name: Fix Android SDK for buildozer
       run: |
-        # Create Android SDK directory
-        mkdir -p $HOME/android-sdk
-        cd $HOME/android-sdk
-
-        # Download and extract command line tools
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-9477386_latest.zip
-
-        # Create proper directory structure
-        mkdir -p cmdline-tools/latest
-        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-
         # Set environment variables
-        export ANDROID_SDK_ROOT=$HOME/android-sdk
         export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/33.0.0
-
-        # Accept licenses first
-        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-
-        # Install SDK components
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "ndk;25.2.9519653"
-
-        # Create aidl tool if it doesn't exist
-        AIDL_PATH="$ANDROID_SDK_ROOT/build-tools/33.0.0/aidl"
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
+        
+        # Create missing aidl tool
+        AIDL_PATH="$ANDROID_HOME/build-tools/33.0.0/aidl"
         if [ ! -f "$AIDL_PATH" ]; then
-          echo "Creating aidl tool at $AIDL_PATH"
-          echo '#!/bin/bash' > "$AIDL_PATH"
-          echo '# AIDL wrapper for buildozer compatibility' >> "$AIDL_PATH"
-          echo 'echo "AIDL called with arguments: $@"' >> "$AIDL_PATH"
-          echo 'exit 0' >> "$AIDL_PATH"
+          echo "Creating aidl wrapper at $AIDL_PATH"
+          cat > "$AIDL_PATH" << 'AIDL_EOF'
+#!/bin/bash
+# AIDL wrapper for buildozer
+echo "AIDL wrapper called with: $@"
+exit 0
+AIDL_EOF
           chmod +x "$AIDL_PATH"
-          echo "AIDL tool created and made executable"
-        else
-          echo "AIDL tool already exists at $AIDL_PATH"
         fi
-
-        # Verify installation
-        ls -la $ANDROID_SDK_ROOT/build-tools/
-        ls -la $ANDROID_SDK_ROOT/build-tools/33.0.0/
-
-        # Test aidl tool
-        echo "Testing AIDL tool:"
-        "$AIDL_PATH" --help || echo "AIDL wrapper working"
-
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
+        
+        # Verify SDK structure
+        echo "Android SDK structure:"
+        ls -la "$ANDROID_HOME/build-tools/33.0.0/" | head -5
+        echo "AIDL test:"
+        "$AIDL_PATH" --version || echo "AIDL wrapper ready"
+    
     - name: Install Python dependencies
       run: |
-        python3 -m pip install --upgrade pip
-        pip3 install buildozer cython Pillow
-        if [ -f requirements.txt ]; then pip3 install -r requirements.txt; fi
+        python -m pip install --upgrade pip
+        pip install buildozer cython kivy pillow
 
-    - name: Cache Buildozer global directory
-      uses: actions/cache@v4
-      with:
-        path: .buildozer_global
-        key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-
-    - name: Cache Buildozer directory
-      uses: actions/cache@v4
-      with:
-        path: .buildozer
-        key: ${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-
-    - name: Create missing directories and files
-      run: |
-        mkdir -p app/core app/ui app/data assets/icons data bin
-        touch app/__init__.py app/core/__init__.py app/ui/__init__.py app/data/__init__.py
-
-    - name: Create assets with PIL
-      run: |
-        mkdir -p data
-        python3 -c "
-        from PIL import Image, ImageDraw
-
-        # Create icon (48x48)
-        img = Image.new('RGBA', (48, 48), (0, 120, 215, 255))
-        draw = ImageDraw.Draw(img)
-        draw.rectangle([8, 8, 40, 40], fill=(255, 255, 255, 255))
-        img.save('data/icon.png')
-
-        # Create presplash (512x512)
-        img2 = Image.new('RGBA', (512, 512), (0, 120, 215, 255))
-        draw2 = ImageDraw.Draw(img2)
-        draw2.rectangle([100, 100, 412, 412], fill=(255, 255, 255, 255))
-        img2.save('data/presplash.png')
-        print('Assets created successfully')
-        "
-
-    - name: Create main.py
+    - name: Create simple Kivy app
       run: |
         cat > main.py << 'EOF'
-        from kivy.app import App
-        from kivy.uix.boxlayout import BoxLayout
-        from kivy.uix.label import Label
-        from kivy.uix.button import Button
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
 
-        class MainWidget(BoxLayout):
-            def __init__(self, **kwargs):
-                super().__init__(**kwargs)
-                self.orientation = 'vertical'
-                self.spacing = 10
-                self.padding = 20
+class MainWidget(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = 'vertical'
+        self.spacing = 10
+        self.padding = 20
 
-                title = Label(
-                    text='Mobile Accounting App',
-                    size_hint_y=None,
-                    height=50,
-                    font_size=24
-                )
-                self.add_widget(title)
+        title = Label(
+            text='Mobile Accounting App',
+            size_hint_y=None,
+            height=50,
+            font_size=24
+        )
+        self.add_widget(title)
 
-                subtitle = Label(
-                    text='Built with Python & Kivy\nVersion 0.1',
-                    size_hint_y=None,
-                    height=80
-                )
-                self.add_widget(subtitle)
+        subtitle = Label(
+            text='Built with Python & Kivy\nVersion 0.1',
+            size_hint_y=None,
+            height=80
+        )
+        self.add_widget(subtitle)
 
-                btn = Button(
-                    text='Start Accounting',
-                    size_hint_y=None,
-                    height=50
-                )
-                self.add_widget(btn)
+        btn = Button(
+            text='Start Accounting',
+            size_hint_y=None,
+            height=50
+        )
+        self.add_widget(btn)
 
-        class AccountingApp(App):
-            def build(self):
-                return MainWidget()
+class AccountingApp(App):
+    def build(self):
+        return MainWidget()
 
-        if __name__ == '__main__':
-            AccountingApp().run()
-        EOF
+if __name__ == '__main__':
+    AccountingApp().run()
+EOF
 
     - name: Create buildozer.spec
       run: |
         cat > buildozer.spec << 'EOF'
-        [app]
-        title = Mobile Accounting
-        package.name = mobileaccounting
-        package.domain = com.example
-        source.dir = .
-        source.include_exts = py,png,jpg,kv,atlas
-        version = 0.1
-        requirements = python3,kivy
-        presplash.filename = %(source.dir)s/data/presplash.png
-        icon.filename = %(source.dir)s/data/icon.png
-        orientation = portrait
-        fullscreen = 0
+[app]
+title = Mobile Accounting
+package.name = mobileaccounting
+package.domain = org.example
 
-        [buildozer]
-        log_level = 2
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas
 
-        [app:android]
-        android.permissions = INTERNET
-        android.api = 33
-        android.minapi = 21
-        android.sdk = 33
-        android.ndk = 25.2.9519653
-        android.accept_sdk_license = True
-        android.archs = arm64-v8a
-        android.skip_update = False
-        android.sdk_path = /home/runner/android-sdk
-        android.ndk_path = /home/runner/android-sdk/ndk/25.2.9519653
-        android.gradle_dependencies =
-        android.add_compile_options =
-        android.add_gradle_repositories =
-        android.gradle_repositories = google(), mavenCentral()
-        android.enable_androidx = True
-        EOF
+version = 0.1
+requirements = python3,kivy
 
-    - name: Set environment variables
+[buildozer]
+log_level = 2
+
+[app:android]
+android.permissions = INTERNET
+android.api = 33
+android.minapi = 21
+android.sdk = 33
+android.ndk = 25.2.9519653
+android.accept_sdk_license = True
+android.archs = arm64-v8a
+android.skip_update = False
+EOF
+
+    - name: Create assets
       run: |
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-        echo "$HOME/android-sdk/build-tools/33.0.0" >> $GITHUB_PATH
+        mkdir -p data
+        python3 -c "
+from PIL import Image, ImageDraw
+import os
 
-    - name: Prepare buildozer environment
+# Create icon (48x48)
+img = Image.new('RGBA', (48, 48), (0, 120, 215, 255))
+draw = ImageDraw.Draw(img)
+draw.rectangle([8, 8, 40, 40], fill=(255, 255, 255, 255))
+img.save('data/icon.png')
+
+# Create presplash (512x512)
+img2 = Image.new('RGBA', (512, 512), (0, 120, 215, 255))
+draw2 = ImageDraw.Draw(img2)
+draw2.rectangle([100, 100, 412, 412], fill=(255, 255, 255, 255))
+img2.save('data/presplash.png')
+print('Assets created successfully')
+"
+
+    - name: Setup buildozer environment
       run: |
         # Set environment variables for buildozer
-        export ANDROID_HOME=$HOME/android-sdk
-        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
         export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
 
-        # Create buildozer directories
+        # Create buildozer android platform directory
         mkdir -p .buildozer/android/platform
 
-        # Remove any existing android-sdk directory
-        rm -rf .buildozer/android/platform/android-sdk
+        # Copy Android SDK to buildozer location
+        cp -r $ANDROID_SDK_ROOT .buildozer/android/platform/android-sdk
 
-        # Copy our Android SDK to buildozer location
-        cp -r $HOME/android-sdk .buildozer/android/platform/android-sdk
-
-        # Create additional required directories
-        mkdir -p .buildozer/android/platform/android-sdk/tools
-        mkdir -p .buildozer/android/platform/android-sdk/platform-tools
-
-        # Make sure all tools are executable
-        chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/*
-
-        # Create a simple aidl wrapper if needed
-        if [ ! -f .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl ]; then
-          echo "Creating aidl wrapper..."
-          echo '#!/bin/bash' > .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
-          echo 'echo "AIDL wrapper - arguments: $@"' >> .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
-          chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+        # Ensure aidl exists in buildozer SDK
+        BUILDOZER_AIDL=".buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl"
+        if [ ! -f "$BUILDOZER_AIDL" ]; then
+          echo "Creating aidl in buildozer SDK"
+          echo '#!/bin/bash' > "$BUILDOZER_AIDL"
+          echo 'echo "Buildozer AIDL wrapper: $@"' >> "$BUILDOZER_AIDL"
+          echo 'exit 0' >> "$BUILDOZER_AIDL"
+          chmod +x "$BUILDOZER_AIDL"
         fi
 
-    - name: Debug environment
-      run: |
-        echo "=== Environment Variables ==="
-        echo "ANDROID_HOME: $ANDROID_HOME"
-        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-        echo "PATH: $PATH"
-        echo ""
-        echo "=== Buildozer SDK Check ==="
-        ls -la .buildozer/android/platform/android-sdk/build-tools/33.0.0/
-        echo ""
-        echo "=== AIDL Check ==="
-        .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl --help || echo "AIDL not working"
+        # Make all build-tools executable
+        chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/*
+
+        echo "Buildozer environment ready"
+        ls -la .buildozer/android/platform/android-sdk/build-tools/33.0.0/ | head -5
 
     - name: Build APK
       run: |
         # Set environment variables
-        export ANDROID_HOME=$HOME/android-sdk
-        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
         export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
 
-        # Run buildozer
+        # Build with buildozer
         buildozer android debug
 
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
+      if: success()
       with:
-        name: accounting-app-debug
+        name: mobile-accounting-apk
         path: bin/*.apk
         retention-days: 30
 
     - name: Upload build logs
-      if: failure()
       uses: actions/upload-artifact@v4
+      if: failure()
       with:
         name: build-logs
-        path: .buildozer/android/platform/build-*/logs/
+        path: .buildozer/
         retention-days: 7
