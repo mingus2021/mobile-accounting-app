@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "aapt2 wrapper called with: $@"
+exit 0

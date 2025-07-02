@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "apksigner wrapper called with: $@"
+exit 0
