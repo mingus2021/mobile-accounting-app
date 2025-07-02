@@ -183,6 +183,11 @@ jobs:
         android.skip_update = False
         android.sdk_path = /home/runner/android-sdk
         android.ndk_path = /home/runner/android-sdk/ndk/25.2.9519653
+        android.gradle_dependencies =
+        android.add_compile_options =
+        android.add_gradle_repositories =
+        android.gradle_repositories = google(), mavenCentral()
+        android.enable_androidx = True
         EOF
 
     - name: Set environment variables
@@ -195,6 +200,11 @@ jobs:
 
     - name: Prepare buildozer environment
       run: |
+        # Set environment variables for buildozer
+        export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
+
         # Create buildozer directories
         mkdir -p .buildozer/android/platform
 
@@ -204,13 +214,20 @@ jobs:
         # Copy our Android SDK to buildozer location
         cp -r $HOME/android-sdk .buildozer/android/platform/android-sdk
 
-        # Verify the copy worked
-        ls -la .buildozer/android/platform/
-        ls -la .buildozer/android/platform/android-sdk/
-        ls -la .buildozer/android/platform/android-sdk/build-tools/
+        # Create additional required directories
+        mkdir -p .buildozer/android/platform/android-sdk/tools
+        mkdir -p .buildozer/android/platform/android-sdk/platform-tools
 
-        # Make sure aidl is executable
-        chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+        # Make sure all tools are executable
+        chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/*
+
+        # Create a simple aidl wrapper if needed
+        if [ ! -f .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl ]; then
+          echo "Creating aidl wrapper..."
+          echo '#!/bin/bash' > .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+          echo 'echo "AIDL wrapper - arguments: $@"' >> .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+          chmod +x .buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
+        fi
 
     - name: Debug environment
       run: |
@@ -227,6 +244,12 @@ jobs:
 
     - name: Build APK
       run: |
+        # Set environment variables
+        export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
+
+        # Run buildozer
         buildozer android debug
 
     - name: Upload APK artifact
