@@ -1,1 +1,0 @@
-# Mobile Accounting App Package
