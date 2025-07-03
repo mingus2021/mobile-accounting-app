@@ -34,8 +34,51 @@ jobs:
         python -m pip install --upgrade pip
         pip install buildozer cython kivy
 
+    - name: Setup Android SDK
+      run: |
+        # Set up Android SDK
+        export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
+        mkdir -p $ANDROID_HOME
+
+        # Download command line tools
+        cd $ANDROID_HOME
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+
+        # Set PATH
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+
+        # Accept licenses and install packages
+        yes | sdkmanager --licenses || true
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
+
+        # Create buildozer directory structure
+        mkdir -p $HOME/.buildozer/android/platform
+        cp -r $ANDROID_HOME $HOME/.buildozer/android/platform/android-sdk
+
+        # Create aidl wrapper script
+        mkdir -p $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2
+        echo '#!/bin/bash' > $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
+        echo 'echo "aidl wrapper - doing nothing"' >> $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
+        echo 'exit 0' >> $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
+        chmod +x $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
+
+        # Set environment variables for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+
     - name: Build APK
       run: |
+        # Debug info
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "Build tools directory:"
+        ls -la $HOME/.buildozer/android/platform/android-sdk/build-tools/ || echo "Build tools not found"
+
+        # Build APK
         buildozer android debug
 
     - name: Upload APK artifact
