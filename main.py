@@ -1,8 +1,8 @@
 from kivy.app import App
 from kivy.uix.label import Label
 
-class MobileAccountingApp(App):
+class HelloWorldApp(App):
     def build(self):
-        return Label(text='Mobile Accounting App - Build Test')
+        return Label(text='Hello World - APK Build Test')
 
-MobileAccountingApp().run()
+HelloWorldApp().run()
