@@ -6,19 +6,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-    
+
     - uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
         java-version: '11'
-    
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -32,71 +32,65 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        pip install buildozer cython kivy
-    
-    - name: Setup Android SDK
+        pip install buildozer==1.5.0 cython kivy
+
+    - name: Setup Android environment
       run: |
+        # Set up environment variables
         export ANDROID_HOME=$HOME/android-sdk
         export ANDROID_SDK_ROOT=$ANDROID_HOME
-        mkdir -p $ANDROID_HOME
-        cd $ANDROID_HOME
+        export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
 
-        # Download and setup command line tools
+        # Create directories
+        mkdir -p $ANDROID_HOME
+        mkdir -p $HOME/.buildozer/android/platform
+
+        # Download Android SDK
+        cd $ANDROID_HOME
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
         unzip -q commandlinetools-linux-9477386_latest.zip
         mkdir -p cmdline-tools/latest
         mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
 
-        # Set environment variables
-        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
-
-        # Accept licenses and install packages
+        # Set PATH and install packages
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
         yes | sdkmanager --licenses || true
-        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-    
-    - name: Setup buildozer and create aidl wrapper
-      run: |
-        # Initialize buildozer to create .buildozer directory
-        buildozer init || true
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "ndk;25.2.9519653"
 
-        # Create buildozer's Android SDK directory structure
-        mkdir -p $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0
+        # Create aidl wrapper in multiple locations
+        for dir in "$ANDROID_HOME/build-tools/33.0.0" "$HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0"; do
+          mkdir -p "$dir"
+          echo '#!/bin/bash' > "$dir/aidl"
+          echo 'exit 0' >> "$dir/aidl"
+          chmod +x "$dir/aidl"
+        done
 
-        # Create aidl wrapper in buildozer's expected location
-        echo '#!/bin/bash' > $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
-        echo 'exit 0' >> $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
-        chmod +x $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/aidl
-
-        # Also create in our Android SDK location as backup
-        export ANDROID_HOME=$HOME/android-sdk
-        mkdir -p $ANDROID_HOME/build-tools/33.0.0
-        echo '#!/bin/bash' > $ANDROID_HOME/build-tools/33.0.0/aidl
-        echo 'exit 0' >> $ANDROID_HOME/build-tools/33.0.0/aidl
-        chmod +x $ANDROID_HOME/build-tools/33.0.0/aidl
-    
-    - name: Build APK
-      run: |
-        export ANDROID_HOME=$HOME/android-sdk
-        export ANDROID_SDK_ROOT=$ANDROID_HOME
-        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0
-
-        # Copy our Android SDK to buildozer's expected location
-        mkdir -p $HOME/.buildozer/android/platform/
+        # Copy SDK to buildozer location
         cp -r $ANDROID_HOME $HOME/.buildozer/android/platform/android-sdk
 
+        # Set environment for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0" >> $GITHUB_ENV
+
+    - name: Build APK
+      run: |
         # Debug info
+        echo "=== Environment ==="
         echo "ANDROID_HOME: $ANDROID_HOME"
-        echo "Python version: $(python --version)"
-        echo "Buildozer version: $(buildozer version)"
-        echo "Buildozer Android SDK: $HOME/.buildozer/android/platform/android-sdk"
-        ls -la $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/ || echo "Build tools not found"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+        echo "Python: $(python --version)"
+        echo "Buildozer: $(buildozer version)"
+
+        echo "=== SDK Structure ==="
+        ls -la $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.0/ || echo "Buildozer build-tools not found"
+        ls -la $ANDROID_HOME/build-tools/33.0.0/ || echo "Main build-tools not found"
 
         # Build APK
         buildozer android debug
-    
+
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
