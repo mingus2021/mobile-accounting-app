@@ -2,10 +2,22 @@
 title = Hello World
 package.name = helloworld
 package.domain = org.test
+
 source.dir = .
-source.include_exts = py
+source.include_exts = py,png,jpg,kv,atlas
+
 version = 0.1
+
 requirements = python3,kivy
 
 [buildozer]
 log_level = 2
+warn_on_root = 1
+
+[app:android]
+android.permissions = INTERNET
+android.api = 30
+android.minapi = 21
+android.ndk = 23b
+android.sdk = 30
+android.accept_sdk_license = True
