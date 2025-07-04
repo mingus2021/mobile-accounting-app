@@ -36,59 +36,61 @@ jobs:
 
     - name: Setup Android SDK
       run: |
-        # Set up Android SDK
+        # 设置 Android SDK
         export ANDROID_HOME=$HOME/android-sdk
         export ANDROID_SDK_ROOT=$ANDROID_HOME
         mkdir -p $ANDROID_HOME
 
-        # Download command line tools
+        # 下载命令行工具
         cd $ANDROID_HOME
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
         unzip -q commandlinetools-linux-9477386_latest.zip
         mkdir -p cmdline-tools/latest
         mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
 
-        # Set PATH
+        # 设置 PATH
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
 
-        # Accept licenses and install packages
+        # 接受许可并安装组件
         yes | sdkmanager --licenses || true
         sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
 
-        # Create buildozer directory structure
+        # 创建 Buildozer 目录结构
         mkdir -p $HOME/.buildozer/android/platform
         cp -r $ANDROID_HOME $HOME/.buildozer/android/platform/android-sdk
 
-        # Create aidl wrapper script
+        # 创建 aidl 包装脚本
         mkdir -p $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2
         echo '#!/bin/bash' > $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
         echo 'echo "aidl wrapper - doing nothing"' >> $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
         echo 'exit 0' >> $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
         chmod +x $HOME/.buildozer/android/platform/android-sdk/build-tools/33.0.2/aidl
 
-        # Create symbolic link for sdkmanager
+        # 为 sdkmanager 创建符号链接
         mkdir -p $HOME/.buildozer/android/platform/android-sdk/tools/bin
         ln -s $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager $HOME/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
 
-        # Set environment variables for next steps
+        # 设置环境变量
         echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
         echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
 
     - name: Patch pyjnius for Python 3
       run: |
-        # Patch jnius_utils.pxi to remove Python 2 long type reference
-        find .buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/pyjnius-sdl2 -name jnius_utils.pxi -exec sed -i 's/isinstance(arg, long)/False/g' {} \;
+        # 等待 buildozer 创建 python-for-android 目录
+        buildozer android debug --no-build
+        # 修补 jnius_utils.pxi 以移除 Python 2 long 类型引用
+        find .buildozer/android/platform/python-for-android/pythonforandroid/recipes/pyjnius -name jnius_utils.pxi -exec sed -i 's/isinstance(arg, long)/False/g' {} \;
 
     - name: Build APK
       run: |
-        # Debug info
+        # 调试信息
         echo "ANDROID_HOME: $ANDROID_HOME"
         echo "JAVA_HOME: $JAVA_HOME"
         echo "Build tools directory:"
         ls -la $HOME/.buildozer/android/platform/android-sdk/build-tools/ || echo "Build tools not found"
 
-        # Build APK
+        # 构建 APK
         buildozer android debug
 
     - name: Upload APK artifact
